@@ -37,6 +37,9 @@ public:
     /** Underlying word type */
     typedef uint64_t word_t;
 
+    /** Pre-computed bitmasks */
+    static const uint64_t masks[64];
+
 // Constructors / Destructors
 public:
     /**
