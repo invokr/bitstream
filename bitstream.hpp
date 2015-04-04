@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstring>
 
-/** Read / Write bitstream */
+/** This class provides functions to read and write data as a stream of bits. */
 class bitstream {
 public:
     /** Current I/O mode */
@@ -62,54 +62,30 @@ public:
      *
      * You are required to invoke set_buffer before calling any other functions
      */
-    bitstream() :
-        mError(error::none), mMode(mode::io_unset), mBuffer(nullptr), mBufferBytes(0),
-        mBufferBits(0), mPos(0), mOwnsBuffer(false)
-    {
+    bitstream();
 
-    }
+    /**
+     * Constructs bitstream from a buffer, defaults to reading mode.
+     *
+     * \param buffer Buffer to read or write from
+     * \param size Size of buffer
+     * \param m I/O Mode
+     */
+    bitstream(word_t* buffer, size_t size, mode m = mode::io_reader);
 
-    /** Constructs bitstream from a buffer, defaults to reading mode */
-    bitstream(word_t* buffer, size_t size, mode m = mode::io_reader) :
-        mError(error::none), mMode(m), mBuffer(buffer), mBufferBytes(size), mBufferBits(size*8),
-        mPos(0), mOwnsBuffer(false)
-    {
-        // Verify size
-        if (!verify_size(size)) {
-            mError = error::size;
-            mBuffer = nullptr;
-            mBufferBytes = 0;
-            mBufferBits = 0;
-        }
-    }
+    /**
+     * Constructs bitstream from std::string, read-only
+     *
+     * \param data String to read from
+     */
+    bitstream(const std::string& data);
 
-    /** Constructs bitstream from std::string */
-    bitstream(const std::string& data) :
-        mError(error::none), mMode(mode::io_reader), mBuffer(nullptr), mBufferBytes(0),
-        mBufferBits(0), mPos(0), mOwnsBuffer(true)
-    {
-        if (!verify_size(data.size())) {
-            mError = error::size;
-            return;
-        }
-
-        // +1 just to make sure :)
-        mBufferBytes = (data.size() + 3) / 4 + 1;
-        mBufferBits = mBufferBytes * 8;
-        mBuffer = new word_t[mBufferBytes];
-        memcpy(&mBuffer[0], data.c_str(), data.size());
-    }
-
-    /** Constuct bitstream with given size in writing mode */
-    bitstream(const uint32_t size) :
-        mError(error::none), mMode(mode::io_writer), mBuffer(new word_t[size]), mBufferBytes(size),
-        mBufferBits(size * 8), mPos(0), mOwnsBuffer(true)
-    {
-        if (!verify_size(size)) {
-            mError = error::size;
-            return;
-        }
-    }
+    /**
+     * Constuct bitstream with given size in writing mode.
+     *
+     * \param size Number of bytes to allocate for internal buffer
+     */
+    bitstream(const uint32_t size);
 
     /** Bitstreams should not support copying */
     bitstream(const bitstream&) = delete;
@@ -125,9 +101,8 @@ public:
 
     /** Destructor, frees buffer if owned */
     ~bitstream() {
-        if (mOwnsBuffer) {
+        if (mOwnsBuffer)
             delete[] mBuffer;
-        }
     }
 
     /** Resets bitstream as if you used the default constructor */
@@ -211,22 +186,31 @@ public:
         return mPos;
     }
 
+    /** Returns number of bits left in the stream */
+    uint32_t left() {
+        return mBufferBits - mPos;
+    }
+
     /** Returns pointer to buffer */
     word_t* buffer() {
         return mBuffer;
     }
 
     /** Seek to a specific bit */
-    void seek(uint32_t position);
+    void seek(uint32_t position) {
+        assert(position < mBufferBits);
+        mPos = position;
+    }
 
 // Write only functions
 public:
+    /** Writes up to 32 bits from data */
     void write(uint8_t bits, uint32_t data) {
         assert(mError == error::none);
         assert(mMode == mode::io_writer);
         assert(bits <= 32);
 
-        static constexpr uint8_t bitSize = sizeof(word_t) * 8;  // size of a single chunk in bits
+        static constexpr uint8_t bitSize = sizeof(word_t) << 3;  // size of a single chunk in bits
         const uint32_t start = mPos / bitSize;                  // active chunk
         const uint32_t end = (mPos + bits - 1) / bitSize;       // last chunk
         const uint32_t shift = mPos % bitSize;                  // shift amount
@@ -249,7 +233,7 @@ public:
         assert(mMode == mode::io_reader);
         assert(bits <= 32);
 
-        static constexpr uint8_t bitSize = sizeof(word_t) * 8;  // size of a single chunk in bits
+        static constexpr uint8_t bitSize = sizeof(word_t) << 3;  // size of a single chunk in bits
         const uint32_t start = mPos / bitSize;                // current active chunk
         const uint32_t end   = (mPos + bits - 1) / bitSize;   // next chunk in case of wrapping
         const uint32_t shift = mPos % bitSize;                // shift amount
