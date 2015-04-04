@@ -35,10 +35,25 @@ public:
     };
 
     /** Underlying word type */
-    typedef uint64_t word_t;
+    typedef uint32_t word_t;
 
     /** Pre-computed bitmasks */
-    static const uint64_t masks[64];
+    static constexpr uint64_t masks[64] = {
+        0x0,             0x1,              0x3,              0x7,
+        0xf,             0x1f,             0x3f,             0x7f,
+        0xff,            0x1ff,            0x3ff,            0x7ff,
+        0xfff,           0x1fff,           0x3fff,           0x7fff,
+        0xffff,          0x1ffff,          0x3ffff,          0x7ffff,
+        0xfffff,         0x1fffff,         0x3fffff,         0x7fffff,
+        0xffffff,        0x1ffffff,        0x3ffffff,        0x7ffffff,
+        0xfffffff,       0x1fffffff,       0x3fffffff,       0x7fffffff,
+        0xffffffff,      0x1ffffffff,      0x3ffffffff,      0x7ffffffff,
+        0xfffffffff,     0x1fffffffff,     0x3fffffffff,     0x7fffffffff,
+        0xffffffffff,    0x1ffffffffff,    0x3ffffffffff,    0x7ffffffffff,
+        0xfffffffffff,   0x1fffffffffff,   0x3fffffffffff,   0x7fffffffffff,
+        0xffffffffffff,  0x1ffffffffffff,  0x3ffffffffffff,  0x7ffffffffffff,
+        0xfffffffffffff, 0x1fffffffffffff, 0x3fffffffffffff, 0x7fffffffffffff
+    };
 
 // Constructors / Destructors
 public:
@@ -83,6 +98,17 @@ public:
         mBufferBits = mBufferBytes * 8;
         mBuffer = new word_t[mBufferBytes];
         memcpy(&mBuffer[0], data.c_str(), data.size());
+    }
+
+    /** Constuct bitstream with given size in writing mode */
+    bitstream(const uint32_t size) :
+        mError(error::none), mMode(mode::io_writer), mBuffer(new word_t[size]), mBufferBytes(size),
+        mBufferBits(size * 8), mPos(0), mOwnsBuffer(true)
+    {
+        if (!verify_size(size)) {
+            mError = error::size;
+            return;
+        }
     }
 
     /** Bitstreams should not support copying */
@@ -134,7 +160,7 @@ public:
 
     /** Sets I/O mode for this stream. */
     void set_mode(mode io_mode) {
-        if (mMode == mode::io_unset) {
+        if (mMode != mode::io_unset) {
             mError = error::redef;
             return;
         }
@@ -185,15 +211,59 @@ public:
         return mPos;
     }
 
+    /** Returns pointer to buffer */
+    word_t* buffer() {
+        return mBuffer;
+    }
+
     /** Seek to a specific bit */
     void seek(uint32_t position);
 
 // Write only functions
 public:
+    void write(uint8_t bits, uint32_t data) {
+        assert(mError == error::none);
+        assert(mMode == mode::io_writer);
+        assert(bits <= 32);
+
+        static constexpr uint8_t bitSize = sizeof(word_t) * 8;  // size of a single chunk in bits
+        const uint32_t start = mPos / bitSize;                  // active chunk
+        const uint32_t end = (mPos + bits - 1) / bitSize;       // last chunk
+        const uint32_t shift = mPos % bitSize;                  // shift amount
+
+        if (start == end) {
+            mBuffer[start] = (mBuffer[start] & masks[shift]) | (data << shift);
+        } else {
+            mBuffer[start] = (mBuffer[start] & masks[shift]) | ((data & masks[bitSize - shift]) << shift);
+            mBuffer[end] = data << (bitSize - shift);
+        }
+
+        mPos += bits;
+    }
 
 // Read only functions
 public:
+    /** Reads up to 32 bits */
+    uint32_t read(uint8_t bits) {
+        assert(mError == error::none);
+        assert(mMode == mode::io_reader);
+        assert(bits <= 32);
 
+        static constexpr uint8_t bitSize = sizeof(word_t) * 8;  // size of a single chunk in bits
+        const uint32_t start = mPos / bitSize;                // current active chunk
+        const uint32_t end   = (mPos + bits - 1) / bitSize;   // next chunk in case of wrapping
+        const uint32_t shift = mPos % bitSize;                // shift amount
+
+        uint32_t ret; // return value
+        if (start == end) {
+            ret = (mBuffer[start] >> shift) & masks[bits];
+        } else {
+            ret = ((mBuffer[start] >> shift) | (mBuffer[end] << (bitSize - shift))) & masks[bits];
+        }
+
+        mPos += bits;
+        return ret;
+    }
 private:
     enum error mError;
     enum mode mMode;
@@ -206,7 +276,7 @@ private:
     /** Verifies buffer size */
     bool verify_size(uint32_t size) {
         static size_t size_bits_max = (2^32) - 1;
-        return (size * 8) + 1 < size_bits_max;
+        return (size * 8) + 1 > size_bits_max;
     }
 };
 
