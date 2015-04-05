@@ -218,11 +218,22 @@ public:
         if (start == end) {
             mBuffer[start] = (mBuffer[start] & masks[shift]) | (data << shift);
         } else {
-            mBuffer[start] = (mBuffer[start] & masks[shift]) | ((data & masks[bitSize - shift]) << shift);
-            mBuffer[end] = data << (bitSize - shift);
+            mBuffer[start] = (mBuffer[start] & masks[shift]) | (data << shift);
+            mBuffer[end] = (data >> (bitSize - shift)) & masks[bits - (bitSize - shift)];
         }
 
         mPos += bits;
+    }
+
+    /** Writes number of bytes */
+    void write_bytes(const char* data, uint32_t size) {
+        if ((mPos & 7) == 0) {
+            memcpy(&(reinterpret_cast<char*>(mBuffer)[mPos >> 3]), data, size);
+        } else {
+            for (uint32_t i = 0; i < size; ++i) {
+                write(8, data[i]);
+            }
+        }
     }
 
 // Read only functions
@@ -247,6 +258,17 @@ public:
 
         mPos += bits;
         return ret;
+    }
+
+    /** Reads number of bytes into destination buffer */
+    void read_bytes(uint32_t bytes, char* dest) {
+        if ((mPos & 7) == 0) {
+            memcpy(dest, &(reinterpret_cast<char*>(mBuffer)[mPos >> 3]), bytes);
+        } else {
+            for (uint32_t i = 0; i < bytes; ++i) {
+                dest[i] = static_cast<int8_t>(read(8));
+            }
+        }
     }
 private:
     enum error mError;
