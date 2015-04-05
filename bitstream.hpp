@@ -133,14 +133,18 @@ public:
         return mError;
     }
 
-    /** Sets I/O mode for this stream. */
+    /**
+     * Sets I/O mode for this stream.
+     *
+     * \param io_mode I/O Mode to set
+     */
     void set_mode(mode io_mode) {
         if (mMode != mode::io_unset) {
             mError = error::redef;
             return;
         }
 
-        this->mMode = mode::io_unset;
+        this->mMode = io_mode;
     }
 
     /** Returns current I/O mode */
@@ -158,7 +162,12 @@ public:
         return mMode == mode::io_writer;
     }
 
-    /** Sets internal buffer */
+    /**
+     * Sets buffer used for reading / writing.
+     *
+     * \param buffer Buffer to use internally
+     * \param size Size of buffer
+     */
     void set_buffer(word_t* buffer, uint32_t size) {
         if (mBuffer) {
             mError = error::redef;
@@ -196,7 +205,12 @@ public:
         return mBuffer;
     }
 
-    /** Seek to a specific bit */
+    /**
+     * Seek to a specific bit.
+     * Does a boundary check against the maximum position possible.
+     *
+     * \param position Position in bits to seek to.
+     */
     void seek(uint32_t position) {
         assert(position < mBufferBits);
         mPos = position;
@@ -204,7 +218,13 @@ public:
 
 // Write only functions
 public:
-    /** Writes up to 32 bits from data */
+    /**
+     * Writes up to 32 bits from data to the buffer.
+     * If bits is not 32, only writes the lower bits.
+     *
+     * \param bits Number of bits to write
+     * \param data Data to write
+     */
     void write(uint8_t bits, uint32_t data) {
         assert(mError == error::none);
         assert(mMode == mode::io_writer);
@@ -225,7 +245,12 @@ public:
         mPos += bits;
     }
 
-    /** Writes number of bytes */
+    /**
+     * Writes specified number of bytes read from data.
+     *
+     * \param data Data to read from
+     * \param size Size of data
+     */
     void write_bytes(const char* data, uint32_t size) {
         if ((mPos & 7) == 0) {
             memcpy(&(reinterpret_cast<char*>(mBuffer)[mPos >> 3]), data, size);
@@ -238,7 +263,11 @@ public:
 
 // Read only functions
 public:
-    /** Reads up to 32 bits */
+    /** 
+     * Reads up to 32 bits from the stream
+     * 
+     * \param bits Number of bits to read
+     */
     uint32_t read(uint8_t bits) {
         assert(mError == error::none);
         assert(mMode == mode::io_reader);
@@ -260,7 +289,12 @@ public:
         return ret;
     }
 
-    /** Reads number of bytes into destination buffer */
+    /** 
+     * Reads number of bytes into buffer
+     * 
+     * \param bytes Number of bytes to read
+     * \param dest Where to copy the read bytes
+     */
     void read_bytes(uint32_t bytes, char* dest) {
         if ((mPos & 7) == 0) {
             memcpy(dest, &(reinterpret_cast<char*>(mBuffer)[mPos >> 3]), bytes);
